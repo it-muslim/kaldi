@@ -73,7 +73,7 @@ def phone_symb2int(phones_file: str) -> Dict[str, int]:
 def phone_int2symb(phones_file: str) -> Dict[int, str]:
     """Is opposite to phone_symb2int"""
     symb2int = phone_symb2int(phones_file)
-    return {y: x for x, y in symb2int.iteritems()}
+    return {y: x for x, y in symb2int.items()}
 
 
 def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
