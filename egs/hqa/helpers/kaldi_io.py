@@ -4,12 +4,14 @@ features and phonemes.
 NOTE: It is assumed that all necessary commands exist (i.e are added to PATH).
 """
 
-from typing import Dict
+import os
+import glob
+from typing import Optional, Dict
 import subprocess
 import numpy as np
 
 
-def pdf2phone(model_path: str) -> Dict[int, str]:
+def pdf2phone(model: str) -> Dict[int, str]:
     """Map pdf_id(s) to actual phones
 
     Uses kaldi's show-transition command, which gives output like:
@@ -27,7 +29,7 @@ def pdf2phone(model_path: str) -> Dict[int, str]:
 
     Parameters
     ----------
-    model_path : str
+    model : str
         A path to a folder, containing files phones.txt, final.mdl
         and final.occs. For example, 'exp/mono_mfcc'
 
@@ -36,8 +38,13 @@ def pdf2phone(model_path: str) -> Dict[int, str]:
     mapping : dict
         A dict of pairs {pdf_id: phone_symb}
     """
+
+    # If final.mdl path provided instead of dir
+    if os.path.isfile(model):
+        model = os.path.dirname(model)
+
     mapping = {}
-    command = f"show-transitions {model_path}/phones.txt {model_path}/final.mdl {model_path}/final.occs | grep Transition-state"
+    command = f"show-transitions {model}/phones.txt {model}/final.mdl {model}/final.occs | grep Transition-state"
     proc = subprocess.Popen(
         command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash"
     )
@@ -76,8 +83,8 @@ def phone_int2symb(phones_file: str) -> Dict[int, str]:
     return {y: x for x, y in symb2int.items()}
 
 
-def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
-    """Import feats(or feats-like) data as a numpy array
+def read_feats(command: str) -> Dict[str, np.array]:
+    """Reading from stdout, import feats(or feats-like) data as a numpy array
 
     As feats are generated "on-fly" in kaldi, there is no a feats file
     (except most simple cases like raw mfcc, plp or fbank).  So, that is why
@@ -95,7 +102,7 @@ def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
 
     Parameters
     ----------
-    feats_command : str
+    command : str
         A command generating feats and printing them to stdout by 'ark,t:-'.
         For example,
         'copy-feats scp:data/test/feats.scp ark,t:-'
@@ -110,7 +117,7 @@ def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
     # current_row = 0
     current_utter = None
     proc = subprocess.Popen(
-        feats_command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash"
+        command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash"
     )
     line = proc.stdout.readline()
     while line != b"":
@@ -119,7 +126,9 @@ def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
             if line.startswith("  "):
                 # If feature values
                 assert current_utter is not None
-                feats[current_utter].append([float(x) for x in line.strip(" ]\n").split(" ")])
+                feats[current_utter].append(
+                    [float(x) for x in line.strip(" ]\n").split(" ")]
+                )
                 # current_row += 1
             else:
                 # If a new utterance
@@ -137,37 +146,49 @@ def read_feats_from_stdout(feats_command: str) -> Dict[str, np.array]:
     return feats
 
 
-def read_ali_from_stdout(model: str, ali_rspec: str) -> Dict[str, np.array]:
-    """Import alignments as a numpy array
+def read_ali(model: str, rspec: Optional[str] = None) -> Dict[str, np.array]:
+    """Reading from stdout, import alignments as a numpy array
 
     The function allows to get per-frame phoneme predictions from alignment
-    files.  It has different syntax (input arguments) than read_feats...
-    because usually there are many alignment files in one folder of a model.
-    So, rspec for ali must be specified.
+    files.
 
     Parameters
     ----------
     model : str
-        A path to model for alignment. For example, 'exp/mono_mfcc/final.mdl'
-    ali_rspec: str
+        A path to model for alignment. Can be a directory of a model or
+        a path to *.mdl file. If a dir provided, then by default 'final.mdl'
+        will be used as a model
+    rspec : str, optional
         Standard kaldi rspec for an alignment file.
-        For example, 'ark:"gunzip -c exp/mono_mfcc/ali.1.gz|"
+        For example, 'ark:"gunzip -c exp/mono_mfcc/ali.1.gz|"'
+        If not provided, all "ali.*.gz" files from `model` path are used.
 
     Returns
     -------
-    ali : dict
-        A dict of pairs {utterance: }
+    ali : Dict[str, np.array]
+        A dict of pairs {utterance: ali}
     """
     ali = {}
-    command = (
-        f"ali-to-phones --per-frame=true {model} {ali_rspec} ark,t:-"
-    )
-    proc = subprocess.Popen(
-        command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash"
-    )
-    line = proc.stdout.readline()
-    while line != b"":
-        values = line.decode("utf-8").strip(" \n").split(" ")
-        ali[values[0]] = np.array([int(x) for x in values[1:]], dtype=np.int32)
+
+    # Make model to be a path to *.mdl file
+    if os.path.isdir(model):
+        model = os.path.join(model, "final.mdl")
+
+    if rspec is None:
+        # Get rspec for each ali file
+        ali_files = glob.glob(os.path.join(os.path.dirname(model), "ali.*.gz"))
+        rspecs_list = [f'ark:"gunzip -c {ali_file}|"' for ali_file in sorted(ali_files)]
+    else:
+        # Make it a list of one value
+        rspecs_list = [rspec]
+    for single_ali_rspec in rspecs_list:
+        command = f"ali-to-phones --per-frame=true {model} {single_ali_rspec} ark,t:-"
+        proc = subprocess.Popen(
+            command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash"
+        )
         line = proc.stdout.readline()
+        while line != b"":
+            values = line.decode("utf-8").strip(" \n").split(" ")
+            ali[values[0]] = np.array([int(x) for x in values[1:]], dtype=np.int32)
+            line = proc.stdout.readline()
     return ali
