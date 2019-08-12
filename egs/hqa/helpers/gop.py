@@ -9,6 +9,7 @@ but without the lexicon.
 Output: MxN matrix, where M is number of frames, N is the number of phonemes,
 values are probability for the corresponding phoneme to be at the frame with respect to the model.
 3. If the model is good enough then for each frame alignment value must be the most probable one.
+NOTE: It is assumed that all necessary commands exist (i.e are added to PATH).
 """
 
 import os
@@ -110,15 +111,121 @@ def compute_gmm_probs(
         #   alignment phoneme (i.e. real phoneme)
         probs_summary[utterance] = pd.DataFrame(
             {
-                "predicted_phone": prob.idxmax(axis=1),
-                "predicted_phone_prob": prob.max(axis=1),
-                "real_phone": ali,
-                "real_phone_prob": prob.lookup(np.arange(prob.shape[0]), ali),
+                "predicted_phone": prob.idxmax(axis=1).astype(np.uint16),
+                "predicted_phone_prob": prob.max(axis=1).astype(np.float32),
+                "real_phone": ali.astype(np.uint16),
+                "real_phone_prob": prob.lookup(np.arange(prob.shape[0]), ali).astype(
+                    np.float32
+                ),
             }
         )
-        probs_summary[utterance].reset_index(inplace=True)
-        probs_summary[utterance].rename({"index": "frame"}, axis=1, inplace=True)
-    del gmm_likes
+    # del gmm_likes
 
     # Convert dict of DataFrames to one DataFrame
     return pd.concat(probs_summary.values(), keys=probs_summary.keys())
+
+
+def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFrame:
+    """Summarize probs tables like output of `compute_gmm_probs`
+
+    Calculates:
+     - ratio of correct predicted frames
+     - total number of frames
+     - number of correctly predicted frames
+     - mean value of `real_phone_prob / predicted_phone_prob` ratio
+     - median value of `real_phone_prob / predicted_phone_prob` ratio
+    Values can calculated grouped by utterance or phone. Use `by` parameter
+    for that.
+
+    Parameters
+    ----------
+    probs : pd.DataFrame
+        Table of predicted probs for utterances. See `compute_gmm_probs` for
+        the table structure.
+    by : Optional[str], optional
+        Either None, 'phone', or 'utterance'. Provides the mode of
+        summarization. By default, all metrics are calculated overall frames
+        of all utterances. 'phone' means that metrics will be calculated per
+        phoneme, i.e. for each `real_phone` separately. Similarly, 'utterance'
+        means that metrics will be calculated for each
+
+    Returns
+    -------
+    pd.DataFrame
+        A summary table of following structure:
+         - median r/p ratio - median value of `real_phone_prob / predicted_phone_prob` ratio
+         - mean r/p ratio - mean value of `real_phone_prob / predicted_phone_prob` ratio
+         - PER - Phone Error Rate - ratio of incorrectly predicted frames, i.e. `correct_number / total`
+         - correct_number - number of correctly predicted frames
+         - total - total number of frames
+        For `phone` mode it also symbolic codes of phones are also added
+
+    Raises
+    ------
+    ValueError
+        If `by` value is not in (None, 'phone', 'phoneme', 'utt', 'utter', 'utterance')
+    """
+    # Set grouping vector to group values by it
+    if by is None:
+        mode = "overall"
+        grouping_vector = [True] * probs.shape[0]
+    elif by in ("phone", "phoneme"):
+        mode = "phone"
+        grouping_vector = probs.real_phone
+    elif by in ("utt", "utter", "utterance"):
+        mode = "utterance"
+        grouping_vector = probs.index.get_level_values(0)
+    else:
+        raise ValueError("Unknown value of 'by' parameter")
+
+    # Compute grouped summaries
+    summary_table = pd.concat(
+        {
+            "median r/p ratio": (probs.real_phone_prob / probs.predicted_phone_prob)
+            .groupby(grouping_vector)
+            .median()
+            .astype(np.float32),
+            "mean r/p ratio": (probs.real_phone_prob / probs.predicted_phone_prob)
+            .groupby(grouping_vector)
+            .mean()
+            .astype(np.float32),
+            "correct_number": (probs.real_phone_prob == probs.predicted_phone_prob)
+            .astype(int)
+            .groupby(grouping_vector)
+            .sum(),
+            "total": pd.Series(grouping_vector).value_counts(sort=False),
+        },
+        axis=1,
+    )
+    summary_table["PER"] = 100 * (1 - summary_table["PER"] / summary_table["total"])
+    # Rearrange columns
+    summary_table = summary_table[
+        ["median r/p ratio", "mean r/p ratio", "PER", "correct_number", "total"]
+    ]
+
+    # Add mappings between phoneme int code and symbol
+    if mode == "phone":
+        symb2int = phone_symb2int(phones_file)
+        summary_table = pd.concat(
+            (
+                pd.Series(
+                    list(symb2int.keys()),
+                    index=list(symb2int.values()),
+                    name="phone_symbol",
+                ),
+                summary_table,
+            ),
+            axis=1,
+        )
+
+    # Remove dummy group for overall mode
+    if mode == "overall":
+        summary_table.reset_index(drop=True, inplace=True)
+    else:
+        summary_table.index.name = mode
+        summary_table.reset_index(inplace=True)
+
+    # Sort values: from best to worst
+    summary_table.sort_values("PER", ascending=False, inplace=True)
+
+    return summary_table
