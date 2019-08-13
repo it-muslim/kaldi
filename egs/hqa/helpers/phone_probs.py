@@ -125,7 +125,9 @@ def compute_gmm_probs(
     return pd.concat(probs_summary.values(), keys=probs_summary.keys())
 
 
-def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFrame:
+def summarize_probs(
+    probs: pd.DataFrame, by: Optional[str] = None, phones_file: Optional[str] = None
+) -> pd.DataFrame:
     """Summarize probs tables like output of `compute_gmm_probs`
 
     Calculates phone level errors metrics. See output description for output
@@ -143,6 +145,8 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
         of all utterances. 'phone' means that metrics will be calculated per
         phoneme, i.e. for each `real_phone` separately. Similarly, 'utterance'
         means that metrics will be calculated for each
+    phones_file : str, optional
+        A path to a phones.txt file. For example, 'exp/mono_mfcc/phones.txt'
 
     Returns
     -------
@@ -200,7 +204,9 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
         },
         axis=1,
     )
-    summary_table["PER"] = 100 * (1 - summary_table["PER"] / summary_table["total"])
+    summary_table["PER"] = 100 * (
+        1 - summary_table["correct_number"] / summary_table["total"]
+    )
     # Rearrange columns
     summary_table = summary_table[
         [
@@ -215,7 +221,7 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
     ]
 
     # Add mappings between phoneme int code and symbol
-    if mode == "phone":
+    if (mode == "phone") and (phones_file is not None):
         symb2int = phone_symb2int(phones_file)
         summary_table = pd.concat(
             (

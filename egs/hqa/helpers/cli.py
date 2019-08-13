@@ -8,6 +8,7 @@ class CliCommands:
     """Dummy class to group cli commands"""
 
     def analize_phone_errors(
+        self,
         model_dir: str,
         feats: str,
         outputdir: Optional[str] = None,
@@ -34,6 +35,9 @@ class CliCommands:
         # If model_dir is a *.mdl file, then take dirname
         if os.path.isfile(model_dir):
             model_dir = os.path.dirname(model_dir)
+        # For some reason quote marks disappears when values is sent by cli
+        # So, we add quote marks manually and strip for just in case.
+        feats = '"' + feats.strip("'\"") + '"'
         # By default put outputs to model_dir
         if outputdir is None:
             outputdir = model_dir
@@ -50,7 +54,9 @@ class CliCommands:
         summary.to_csv("per_overall.csv")
 
         # Get per phone summary
-        summary = summarize_probs(probs, "phone")
+        summary = summarize_probs(
+            probs, "phone", phones_file=os.path.join(model_dir, "phones.txt")
+        )
         summary.to_csv("per_by_phone.csv")
 
         # Get per utterance summary
