@@ -128,14 +128,9 @@ def compute_gmm_probs(
 def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFrame:
     """Summarize probs tables like output of `compute_gmm_probs`
 
-    Calculates:
-     - ratio of correct predicted frames
-     - total number of frames
-     - number of correctly predicted frames
-     - mean value of `real_phone_prob / predicted_phone_prob` ratio
-     - median value of `real_phone_prob / predicted_phone_prob` ratio
-    Values can calculated grouped by utterance or phone. Use `by` parameter
-    for that.
+    Calculates phone level errors metrics. See output description for output
+    details. Values can be calculated grouped by utterance or phone. Use `by`
+    parameter for that.
 
     Parameters
     ----------
@@ -155,6 +150,8 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
         A summary table of following structure:
          - median r/p ratio - median value of `real_phone_prob / predicted_phone_prob` ratio
          - mean r/p ratio - mean value of `real_phone_prob / predicted_phone_prob` ratio
+         - median_prob - median value of `real_phone_prob`
+         - mean_prob - mean value of `real_phone_prob`
          - PER - Phone Error Rate - ratio of incorrectly predicted frames, i.e. `correct_number / total`
          - correct_number - number of correctly predicted frames
          - total - total number of frames
@@ -189,6 +186,12 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
             .groupby(grouping_vector)
             .mean()
             .astype(np.float32),
+            "median_prob": probs.real_phone_prob.groupby(grouping_vector)
+            .median()
+            .astype(np.float32),
+            "mean_prob": probs.real_phone_prob.groupby(grouping_vector)
+            .mean()
+            .astype(np.float32),
             "correct_number": (probs.real_phone_prob == probs.predicted_phone_prob)
             .astype(int)
             .groupby(grouping_vector)
@@ -200,7 +203,15 @@ def summarize_probs(probs: pd.DataFrame, by: Optional[str] = None) -> pd.DataFra
     summary_table["PER"] = 100 * (1 - summary_table["PER"] / summary_table["total"])
     # Rearrange columns
     summary_table = summary_table[
-        ["median r/p ratio", "mean r/p ratio", "PER", "correct_number", "total"]
+        [
+            "median r/p ratio",
+            "mean r/p ratio",
+            "median_prob",
+            "mean_prob",
+            "PER",
+            "correct_number",
+            "total",
+        ]
     ]
 
     # Add mappings between phoneme int code and symbol
