@@ -23,7 +23,7 @@ from utils import softmax
 
 
 def compute_gmm_probs(
-    model_dir: str, feats_rspec: str, ali_rspec: Optional[str] = None
+    model_dir: str, feats: str, ali_rspec: Optional[str] = None
 ) -> pd.DataFrame:
     """Compute GOP probs for a GMM based model
 
@@ -32,7 +32,7 @@ def compute_gmm_probs(
         (by `ali-to-phones --per-frame=true <model> <ali_rspec> ark,t:-`):
         Output: Vector of length M, M - number of frames
     2. Compute log-likelihoods of pdf_ids for each frame
-        (by `gmm-compute-likes {model} {feats_rspec} ark,t:-`)
+        (by `gmm-compute-likes {model} {feats} ark,t:-`)
         Output: Matrix MxN, M - number of frames, N - number of pdf_ids
     3. Convert log-likelihoods to probabilities by softmax transformation:
         probs[i,:] = softmax(likes[i,:])
@@ -53,9 +53,9 @@ def compute_gmm_probs(
     ----------
     model_dir : str
         A dir to a gmm model. Supposed to be standard kaldi model. For example, 'exp/mono_mfcc'
-    feats_rspec: str
+    feats: str
         A rspec for feats to provide for gmm-compute-likes. For example,
-        feats_rspec = f'"ark,s,cs:apply-cmvn --utt2spk=ark:{data}/utt2spk scp:{data}/cmvn.scp scp:{data}/feats.scp ark:- | add-deltas ark:- ark:- |"'
+        feats = f'"ark,s,cs:apply-cmvn --utt2spk=ark:{data}/utt2spk scp:{data}/cmvn.scp scp:{data}/feats.scp ark:- | add-deltas ark:- ark:- |"'
     ali_rspec: str, optional
         Standard kaldi rspec for an alignment file. For example, 'ark:"gunzip -c exp/mono_mfcc/ali.1.gz|"
         By default all ali.*.gz files from model_dir are taken.
@@ -86,7 +86,7 @@ def compute_gmm_probs(
     alis = read_ali(model, ali_rspec)
 
     # Compute gmm probs for each pdf id
-    gmm_likes_command = f"gmm-compute-likes {model} {feats_rspec} ark,t:-"
+    gmm_likes_command = f"gmm-compute-likes {model} {feats} ark,t:-"
     gmm_likes = read_feats(gmm_likes_command)
 
     # Calculate GOP for each utterance
