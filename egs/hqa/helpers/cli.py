@@ -51,17 +51,17 @@ class CliCommands:
 
         # Get overall summary
         summary = summarize_probs(probs)
-        summary.to_csv("per_overall.csv")
+        summary.to_csv(os.path.join(outputdir,"per_overall.csv"), index=False)
 
         # Get per phone summary
         summary = summarize_probs(
             probs, "phone", phones_file=os.path.join(model_dir, "phones.txt")
         )
-        summary.to_csv("per_by_phone.csv")
+        summary.to_csv(os.path.join(outputdir,"per_by_phone.csv"), index=False)
 
         # Get per utterance summary
         summary = summarize_probs(probs, "utterance")
-        summary.to_csv("per_by_utterance.csv")
+        summary.to_csv(os.path.join(outputdir,"per_by_utterance.csv"), index=False)
 
         return
 

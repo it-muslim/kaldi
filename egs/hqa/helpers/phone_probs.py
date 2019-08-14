@@ -203,6 +203,7 @@ def summarize_probs(
             "total": pd.Series(grouping_vector).value_counts(sort=False),
         },
         axis=1,
+        sort=True
     )
     summary_table["PER"] = 100 * (
         1 - summary_table["correct_number"] / summary_table["total"]
@@ -233,6 +234,7 @@ def summarize_probs(
                 summary_table,
             ),
             axis=1,
+            sort=True
         )
 
     # Remove dummy group for overall mode
