@@ -149,3 +149,18 @@ GSYMS
 /tools/cub-1.8.0/
 /tools/cub
 /tools/python/
+
+# --- Quran Academy ---
+# Quranic metadata
+/egs/hqa/quran_dict/*
+/egs/hqa/quran_records/*
+# Side experiments
+/egs/mohamed_arabic/
+# Backup archives
+*.tar.gz
+*.zip
+# Logs
+/egs/hqa/*/*.log
+# Jupyter Notebook
+.ipynb_checkpoints
+
