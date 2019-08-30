@@ -1,0 +1,6 @@
+[submodule "egs/kaldi-for-dummies"]
+	path = egs/kaldi-for-dummies
+	url = https://github.com/it-muslim/kaldi-for-dummies.git
+[submodule "egs/hqa/helpers"]
+	path = egs/hqa/helpers
+	url = https://github.com/it-muslim/kaldi-helpers.git
