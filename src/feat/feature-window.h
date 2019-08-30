@@ -49,6 +49,7 @@ struct FrameExtractionOptions {
   bool snip_edges;
   bool allow_downsample;
   bool allow_upsample;
+  int max_feature_vectors;
   FrameExtractionOptions():
       samp_freq(16000),
       frame_shift_ms(10.0),
@@ -61,7 +62,9 @@ struct FrameExtractionOptions {
       blackman_coeff(0.42),
       snip_edges(true),
       allow_downsample(false),
-      allow_upsample(false) { }
+      allow_upsample(false),
+      max_feature_vectors(-1)
+      { }
 
   void Register(OptionsItf *opts) {
     opts->Register("sample-frequency", &samp_freq,
@@ -92,6 +95,10 @@ struct FrameExtractionOptions {
     opts->Register("allow-downsample", &allow_downsample,
                    "If true, allow the input waveform to have a higher frequency than "
                    "the specified --sample-frequency (and we'll downsample).");
+    opts->Register("max-feature-vectors", &max_feature_vectors,
+                   "Memory optimization. If larger than 0, periodically remove feature "
+                   "vectors so that only this number of the latest feature vectors is "
+                   "retained.");
     opts->Register("allow-upsample", &allow_upsample,
                    "If true, allow the input waveform to have a lower frequency than "
                    "the specified --sample-frequency (and we'll upsample).");
@@ -155,7 +162,7 @@ void Preemphasize(VectorBase<BaseFloat> *waveform, BaseFloat preemph_coeff);
 
 /**
   This function does all the windowing steps after actually
-  extracting the windowed signal: depeding on the
+  extracting the windowed signal: depending on the
   configuration, it does dithering, dc offset removal,
   preemphasis, and multiplication by the windowing function.
    @param [in] opts  The options class to be used
